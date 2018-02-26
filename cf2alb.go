@@ -3,7 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
-	// "github.com/davecgh/go-spew/spew"
+	"github.com/davecgh/go-spew/spew"
 	"io/ioutil"
 	"log"
 	"os"
@@ -44,13 +44,15 @@ func compare(logfile string, m map[string]map[string]map[string]map[string]map[s
 			_, ok := m[res[1]][res[2]][res[5]][res[6]]
 			if !ok {
 				// fmt.Printf("NO MATCH: %v : %v : %v : %v : %v\n\n", res[1], res[2], res[5], res[6], res[4])
+				fmt.Printf("NO MATCH: %v : %v : %v : %v \n\n", res[1], res[2], res[5], res[6])
 				no_matches = append(no_matches, line)
 			} else {
 				// fmt.Printf("MATCH: %v : %v : %v : %v : %v\n\n", res[1], res[2], res[5], res[6], res[4])
+				fmt.Printf("MATCH: %v : %v : %v : %v \n\n", res[1], res[2], res[5], res[6])
 				matches = append(matches, line)
 			}
 
-			// [2018-02-08][18:18:19][/api/survivors/bulkcommand][id=Team_15115E72DDDEF100_sur-use1d-2_387][200][tR45xclnDMHfn6nzXLWAwJb2j23r27TWy4N0ZeKSoICoJl7d5Q247g==]
+			// [2018-02-08][18:18:19][/api/survivors/bulkcommand][id=Team_15115E72DDDEF100_sur-use1d-2_387][200]
 			// 1. 2018-02-08
 			// 2. 18:18:19
 			// 3. 805422 (ms)
@@ -130,7 +132,7 @@ func main() {
 	}
 
 	// m = makeMap("/tmp/cf_oneline.log", cf)
-	// spew.Dump(m)
+	spew.Dump(m)
 
 	elapsed := time.Since(start)
 	log.Printf("Reading cf logs took %s, %d lines", elapsed, len(m["2018-02-08"]))
@@ -150,9 +152,9 @@ func main() {
 	elapsed = time.Since(start)
 	log.Printf("Reading alb logs took %s, %d lines, %d no id, %d no matches, %d matches (%d total)", elapsed, total_lines, len(no_id), len(no_matches), len(matches), (len(no_id)+len(no_matches)+len(matches)))
 
-	for k, v := range no_matches {
-		fmt.Printf("%d : %s\n", k, v)
-	}
+	// for k, v := range no_matches {
+	// 	fmt.Printf("%d : %s\n", k, v)
+	// }
 
 	log.Println("Done\n")
 
