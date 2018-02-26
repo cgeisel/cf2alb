@@ -17,7 +17,7 @@ func check(e error) {
 	}
 }
 
-func compare(logfile string, m map[string]map[string]map[string]map[string]map[string][]string, r *regexp.Regexp) (int, []string, []string) {
+func compare(logfile string, m map[string]map[string]map[string]map[string]map[string][]string, r *regexp.Regexp) (int, []string, []string, []string) {
 	f, err := os.OpenFile(logfile, os.O_RDONLY, os.ModePerm)
 	if err != nil {
 		log.Fatalf("open file error: %v", err)
@@ -27,6 +27,7 @@ func compare(logfile string, m map[string]map[string]map[string]map[string]map[s
 
 	var no_matches = []string{}
 	var matches = []string{}
+	var no_id = []string{}
 	total_lines := 0
 
 	sc := bufio.NewScanner(f)
@@ -37,9 +38,10 @@ func compare(logfile string, m map[string]map[string]map[string]map[string]map[s
 		res := r.FindStringSubmatch(line)
 		// time.Sleep(1000 * time.Millisecond)
 
-		if res != nil && res[4] == "502"{
+		if res != nil {
 			// fmt.Printf("%v\n", line)
-			_, ok := m[res[1]][res[2]][res[5]][res[6]][res[4]]
+			// _, ok := m[res[1]][res[2]][res[5]][res[6]][res[4]]
+			_, ok := m[res[1]][res[2]][res[5]][res[6]]
 			if !ok {
 				// fmt.Printf("NO MATCH: %v : %v : %v : %v : %v\n\n", res[1], res[2], res[5], res[6], res[4])
 				no_matches = append(no_matches, line)
@@ -55,9 +57,11 @@ func compare(logfile string, m map[string]map[string]map[string]map[string]map[s
 			// 4. 200 (status)
 			// 5. /api/survivors/bulkcommand
 			// 6. id=Team_151090E874F49300_sur-use1a-4_65411
+		} else {
+			no_id = append(no_id, line)
 		}
 	}
-	return total_lines, no_matches, matches
+	return total_lines, no_matches, matches, no_id
 }
 
 func makeMap(logfile string, m map[string]map[string]map[string]map[string]map[string][]string, r *regexp.Regexp) map[string]map[string]map[string]map[string]map[string][]string {
@@ -138,12 +142,13 @@ func main() {
 	var total_lines int
 	var no_matches = []string{}
 	var matches = []string{}
+	var no_id = []string{}
 
 	for _, f := range files {
-		total_lines, no_matches, matches = compare(alb_logdir+f.Name(), m, alb_regexp)
+		total_lines, no_matches, matches, no_id = compare(alb_logdir+f.Name(), m, alb_regexp)
 	}
 	elapsed = time.Since(start)
-	log.Printf("Reading alb logs took %s, %d lines, %d no matches, %d matches", elapsed, total_lines, len(no_matches), len(matches))
+	log.Printf("Reading alb logs took %s, %d lines, %d no id, %d no matches, %d matches (%d total)", elapsed, total_lines, len(no_id), len(no_matches), len(matches), (len(no_id)+len(no_matches)+len(matches)))
 
 	for k, v := range no_matches {
 		fmt.Printf("%d : %s\n", k, v)
