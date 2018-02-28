@@ -68,16 +68,14 @@ func compare(logdir string, m map[string]map[string]map[string]map[string][]stri
 					_, status_match := m[res1_RFC3339][res[4]][res[5]][res[3]]
 					_, request_match := m[res1_RFC3339][res[4]][res[5]]
 					if !status_match {
-						fmt.Printf("NO MATCH: %v : %v : %v : %v\n\n", res1_RFC3339, res[4], res[5], res[3])
+						fmt.Printf("%v\n", line)
 						no_matches = append(no_matches, line)
 					} else if !request_match {
-						fmt.Printf("NO MATCH: %v : %v : %v : %v\n\n", res1_RFC3339, res[4], res[5])
+						fmt.Printf("%v\n", line)
 						no_matches = append(no_matches, line)
 					} else if status_match {
-						fmt.Printf("MATCH: %v : %v : %v : %v\n\n", res1_RFC3339, res[4], res[5], res[3])
 						matches = append(matches, line)
 					} else {
-						fmt.Printf("MATCH: %v : %v : %v \n\n", res1_RFC3339, res[4], res[5])
 						matches = append(matches, line)
 					}
 				} else {
@@ -118,9 +116,9 @@ func makeMap(logdir string) (map[string]map[string]map[string]map[string][]strin
 		defer file.Close()
 
 		sc := bufio.NewScanner(file)
-		lines++
 		for sc.Scan() {
 			line := sc.Text()
+			lines++
 			res := r.FindStringSubmatch(line)
 			// fmt.Printf("%v\n", res)
 			if res != nil {
