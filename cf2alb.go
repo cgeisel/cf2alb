@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"time"
 	"sort"
+	"math"
+	"strconv"
 )
 
 func check(e error) {
@@ -19,9 +21,9 @@ func check(e error) {
 }
 
 func compare(logdir string, m map[string]map[string]map[string]map[string][]string, start_time string, end_time string) (int, []string, []string, []string, []string) {
-	r, _ := regexp.Compile(`^\w+\s(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\.(\d+)Z\s[\w-\/]+\s[\d\.]+:\d+\s[\d\.]+:\d+\s[\d\.]+\s[\d\.]+\s[\d\.]+\s(\d{3})\s\d{3}\s\d+\s\d+\s\"\w+\shttp[s]?:\/\/[\w\.:\d]+(\/[\w\/]+)\?\w+=(Team[\w-]+)`)
+	r, _ := regexp.Compile(`^\w+\s(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(\.\d+)Z\s[\w-\/]+\s[\d\.]+:\d+\s[\d\.]+:\d+\s[\d\.]+\s[\d\.]+\s[\d\.]+\s(\d{3})\s\d{3}\s\d+\s\d+\s\"\w+\shttp[s]?:\/\/[\w\.:\d]+(\/[\w\/]+)\?\w+=(Team[\w-]+)`)
 	// 1. 2018-02-08T18:18:19
-	// 2. 805422 (ms)
+	// 2. .805422 (fractional second)
 	// 3. 200 (status)
 	// 4. /api/survivors/bulkcommand
 	// 5. Team_151090E874F49300_sur-use1a-4_65411
@@ -58,22 +60,25 @@ func compare(logdir string, m map[string]map[string]map[string]map[string][]stri
 			if res != nil {
 				res1_RFC3339 := res[1]+"Z"
 				t, _ := time.Parse(time.RFC3339, res1_RFC3339)
-				// log.Printf("time = %v", res1_RFC3339)
-				// log.Printf("start = %v", start)
-				// log.Printf("t.After(start) = %v", t.After(start))
-				// log.Printf("end = %v", end)
-				// log.Printf("t.Before(end) = %v", t.Before(end))
+				t2 := t.Add(time.Second)
 				if (t.After(start) && t.Before(end)) {
-					// log.Printf("Out of range: %v", res1_RFC3339)
 					_, status_match := m[res1_RFC3339][res[4]][res[5]][res[3]]
 					_, request_match := m[res1_RFC3339][res[4]][res[5]]
-					if !status_match {
+					float_time, _ := strconv.ParseFloat(res[2], 64)
+					var next_second_status = false
+					var next_second_request = false
+					if math.Floor(float_time + 0.5) > 0 {
+						next_second := t2.Format(time.RFC3339)
+						_, next_second_status = m[next_second][res[4]][res[5]][res[3]]
+						_, next_second_request = m[next_second][res[4]][res[5]]
+					}
+					if !status_match && !next_second_status {
 						fmt.Printf("%v\n", line)
 						no_matches = append(no_matches, line)
-					} else if !request_match {
+					} else if !request_match && !next_second_request {
 						fmt.Printf("%v\n", line)
 						no_matches = append(no_matches, line)
-					} else if status_match {
+					} else if status_match || next_second_status{
 						matches = append(matches, line)
 					} else {
 						matches = append(matches, line)
@@ -146,7 +151,8 @@ func makeMap(logdir string) (map[string]map[string]map[string]map[string][]strin
 	}
 	sort.Strings(keys)
 
-	log.Printf("Timestamp: %v", keys[0])
+	log.Printf("Cloudfront Start: %v", keys[0])
+	log.Printf("Cloudfront End: %v", keys[len(keys)-1])
 
 	return m, lines, keys[0], keys[len(keys)-1]
 }
@@ -162,13 +168,15 @@ func main() {
 	// spew.Dump(m)
 
 	elapsed := time.Since(start)
-	log.Printf("Reading cf logs took %s, %d lines", elapsed, cf_lines)
+	log.Printf("Reading Cloudfront logs took %s, %d lines", elapsed, cf_lines)
 
 	alb_lines, no_matches, matches, no_id, bad_time := compare(alb_logdir, m, start_timestamp, end_timestamp)
 
 	elapsed = time.Since(start)
-	log.Printf("Reading alb logs took %s, %d lines, %d no id, %d timestamp out of range, %d no matches, %d matches (%d total)", elapsed, alb_lines, len(no_id), len(bad_time), len(no_matches), len(matches), (len(no_id) + len(no_matches) + len(matches)))
-
-	log.Println("Done\n")
-
+	log.Printf("Reading ALB logs took %s, %d lines", elapsed, alb_lines)
+	log.Printf("%.2f%%\tno team id", float64(len(no_id)) * float64(100)/float64(alb_lines))
+	log.Printf("%.2f%%\ttimestamp out of range", (float64(len(bad_time)) * float64(100)/float64(alb_lines)))
+	log.Printf("%.2f%%\tno matches", (float64(len(no_matches)) * float64(100)/float64(alb_lines)))
+	log.Printf("%.2f%%\tmatches", (float64(len(matches)) * float64(100)/float64(alb_lines)))
+	log.Printf("total %d", (len(no_id) + len(no_matches) + len(matches)))
 }
