@@ -20,7 +20,7 @@ func check(e error) {
 	}
 }
 
-func compare(logdir string, m map[string]map[string]map[string]map[string][]string, start_time string, end_time string) (int, []string, []string, []string, []string) {
+func compare(logdir string, m map[string]map[string]map[string]map[string][]string, start_time string, end_time string) (int, []string, []string, []string, []string, []string, []string, []string, []string, []string) {
 	r, _ := regexp.Compile(`^\w+\s(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(\.\d+)Z\s[\w-\/]+\s[\d\.]+:\d+\s[\d\.]+:\d+\s[\d\.]+\s[\d\.]+\s[\d\.]+\s(\d{3})\s\d{3}\s\d+\s\d+\s\"\w+\shttp[s]?:\/\/[\w\.:\d]+(\/[\w\/]+)\?\w+=(Team[\w-]+)`)
 	// 1. 2018-02-08T18:18:19
 	// 2. .805422 (fractional second)
@@ -29,12 +29,18 @@ func compare(logdir string, m map[string]map[string]map[string]map[string][]stri
 	// 5. Team_151090E874F49300_sur-use1a-4_65411
 
 	var no_matches = []string{}
+	var no_matches_request = []string{}
 	var matches = []string{}
 	var no_id = []string{}
 	var bad_time = []string{}
+	var no_matches_2xx = []string{}
+	var no_matches_3xx = []string{}
+	var no_matches_4xx = []string{}
+	var no_matches_5xx = []string{}
 	total_lines := 0
 	start, _ := time.Parse(time.RFC3339, start_time)
 	end, _ := time.Parse(time.RFC3339, end_time)
+	end = end.Add(time.Second)
 
 	files, err := ioutil.ReadDir(logdir)
 	if err != nil {
@@ -72,12 +78,24 @@ func compare(logdir string, m map[string]map[string]map[string]map[string][]stri
 						_, next_second_status = m[next_second][res[4]][res[5]][res[3]]
 						_, next_second_request = m[next_second][res[4]][res[5]]
 					}
+
 					if !status_match && !next_second_status {
-						fmt.Printf("%v\n", line)
 						no_matches = append(no_matches, line)
+						if i, _ := strconv.Atoi(res[3]); i < 300 {
+							no_matches_2xx = append(no_matches_2xx, line)
+						} else if i, _ := strconv.Atoi(res[3]); i < 400 {
+							no_matches_3xx = append(no_matches_3xx, line)
+							fmt.Printf("%v\n", line)
+						} else if i, _ := strconv.Atoi(res[3]); i < 500 {
+							no_matches_4xx = append(no_matches_4xx, line)
+							fmt.Printf("%v\n", line)
+						} else {
+							no_matches_5xx = append(no_matches_5xx, line)
+							fmt.Printf("%v\n", line)
+						}
 					} else if !request_match && !next_second_request {
-						fmt.Printf("%v\n", line)
-						no_matches = append(no_matches, line)
+						// fmt.Printf("%v\n", line)
+						no_matches_request = append(no_matches, line)
 					} else if status_match || next_second_status{
 						matches = append(matches, line)
 					} else {
@@ -92,7 +110,7 @@ func compare(logdir string, m map[string]map[string]map[string]map[string][]stri
 		}
 	}
 
-	return total_lines, no_matches, matches, no_id, bad_time
+	return total_lines, no_matches, no_matches_request, matches, no_id, bad_time, no_matches_2xx, no_matches_3xx, no_matches_4xx, no_matches_5xx
 }
 
 func makeMap(logdir string) (map[string]map[string]map[string]map[string][]string, int, string, string) {
@@ -170,13 +188,19 @@ func main() {
 	elapsed := time.Since(start)
 	log.Printf("Reading Cloudfront logs took %s, %d lines", elapsed, cf_lines)
 
-	alb_lines, no_matches, matches, no_id, bad_time := compare(alb_logdir, m, start_timestamp, end_timestamp)
+	alb_lines, no_matches, no_matches_request, matches, no_id, bad_time, no_matches_2xx, no_matches_3xx, no_matches_4xx, no_matches_5xx := compare(alb_logdir, m, start_timestamp, end_timestamp)
 
 	elapsed = time.Since(start)
 	log.Printf("Reading ALB logs took %s, %d lines", elapsed, alb_lines)
-	log.Printf("%.2f%%\tno team id", float64(len(no_id)) * float64(100)/float64(alb_lines))
-	log.Printf("%.2f%%\ttimestamp out of range", (float64(len(bad_time)) * float64(100)/float64(alb_lines)))
-	log.Printf("%.2f%%\tno matches", (float64(len(no_matches)) * float64(100)/float64(alb_lines)))
-	log.Printf("%.2f%%\tmatches", (float64(len(matches)) * float64(100)/float64(alb_lines)))
+	log.Printf("%d\t%.2f%%\tno team id", len(no_id), float64(len(no_id)) * float64(100)/float64(alb_lines))
+	log.Printf("%d\t%.2f%%\ttimestamp out of range", len(bad_time), (float64(len(bad_time)) * float64(100)/float64(alb_lines)))
+	log.Printf("%d\t%.2f%%\tno matches", len(no_matches), (float64(len(no_matches)) * float64(100)/float64(alb_lines)))
+	log.Printf("%d\ttotal", len(no_matches))
+	log.Printf("%d\ttotal w/different status", len(no_matches_request))
+	log.Printf("%d\t\t2xx", len(no_matches_2xx))
+	log.Printf("%d\t\t3xx", len(no_matches_3xx))
+	log.Printf("%d\t\t4xx", len(no_matches_4xx))
+	log.Printf("%d\t\t5xx", len(no_matches_5xx))
+	log.Printf("%d\t%.2f%%\tmatches", len(matches), (float64(len(matches)) * float64(100)/float64(alb_lines)))
 	log.Printf("total %d", (len(no_id) + len(no_matches) + len(matches)))
 }
